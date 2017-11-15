@@ -1,3 +1,4 @@
+# encoding:UTF-8
 import os
 import scipy.misc as misc
 import numpy as np
@@ -39,18 +40,21 @@ def get_batch_data(batch_size, num_threads=8):
     return x, y
 
 
-def save_images(images, size, path):
-    images = (images + 1.) / 2  # inverse_transform
-    return misc.imsave(path, _merge_images(images, size))
+def save_images(images, result_file_name, height_number):
+    path = os.path.split(result_file_name)[0]
+    if not os.path.exists(path):
+        os.makedirs(path)
+    images = np.reshape(images, newshape=[len(images), 28, 28])
+    return misc.imsave(result_file_name, _merge_images(images, height_number))
 
 
-def _merge_images(images, size):
+def _merge_images(images, height_number):
+    number = len(images)
     h, w = images.shape[1], images.shape[2]
-    imgs = np.zeros((h * size[0], w * size[1], 3))
-    for idx, image in enumerate(images):
-        i = idx % size[1]
-        j = idx // size[1]
-        imgs[j * h:j * h + h, i * w:i * w + w, :] = image
+    imgs = np.zeros((h * height_number, w * (number // height_number)))
+    for x in range(height_number):
+        for y in range(number//height_number):
+            imgs[h * x: h * (x + 1), h * y: h * (y + 1)] = images[x * height_number + y, :]
         pass
     return imgs
 

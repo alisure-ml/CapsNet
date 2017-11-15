@@ -1,3 +1,4 @@
+# encoding:UTF-8
 import tensorflow as tf
 import tensorflow.contrib.layers as tcl
 
@@ -7,40 +8,33 @@ from capsLayer import CapsLayer
 
 class CapsNet(object):
 
-    # is_training=True 表示训练，可以选择是否使用重构损失(use_recons_loss)和重构时是否使用标签(recon_with_y)
-    # is_training=False 表示不训练，可以选择重构时是否使用标签(recon_with_y)
-    def __init__(self, batch_size, is_training, use_recons_loss, recon_with_y):
+    # 可以选择是否使用重构损失(use_recons_loss)和重构时是否使用标签(recon_with_y)
+    def __init__(self, batch_size, use_recons_loss, recon_with_y):
         self.graph = tf.Graph()
 
         # param
         self.batch_size = batch_size
-        self.is_training = is_training
         self.use_recons_loss = use_recons_loss
         self.recon_with_y = recon_with_y
 
-        # input
-        self.x, self.labels = self._x_labels(self.is_training, self.batch_size)
+        with self.graph.as_default():
+            # input
+            self.x, self.labels = get_batch_data(batch_size)
 
-        # network: result + reconstruction
-        self.caps_digit, self.v_length, self.prediction, self.batch_accuracy, self.masked_v, self.decoded = self.net()
+            # network: result + reconstruction
+            self.caps_digit, self.v_length, self.prediction, self.batch_accuracy, self.recons_input, self.decoded = self.caps_net()
 
-        # loss
-        self.margin_loss, _, self.total_loss = self.loss_total(self.x, self.labels, self.v_length, self.decoded)
+            # loss
+            self.margin_loss, _, self.total_loss = self.loss_total(self.x, self.labels, self.v_length, self.decoded)
 
-        # train
-        self.train_op = self._train_op(self.use_recons_loss, self.margin_loss, self.total_loss)
+            # train
+            self.train_op = self._train_op(self.use_recons_loss, self.margin_loss, self.total_loss)
         pass
 
     @staticmethod
     def _train_op(use_recons_loss, margin_loss, total_loss):
         optimizer = tf.train.AdamOptimizer()
         return optimizer.minimize(total_loss) if use_recons_loss else optimizer.minimize(margin_loss)
-
-    @staticmethod
-    def _x_labels(is_training, batch_size):
-        x = tf.placeholder(tf.float32, shape=(batch_size, 28, 28, 1))
-        labels = tf.placeholder(tf.float32, shape=(batch_size, 10, 1))
-        return get_batch_data(batch_size) if is_training else x, labels
 
     # 简单的网络：没有重构的部分
     def _build_simple_caps_net(self):
@@ -78,7 +72,7 @@ class CapsNet(object):
         return caps_digit, v_length, prediction, batch_accuracy
 
     # 简单的网络+重构的部分
-    def net(self):
+    def caps_net(self):
         caps_digit, v_length, prediction, batch_accuracy = self._build_simple_caps_net()
 
         # Decoder structure in Fig. 2
@@ -87,25 +81,28 @@ class CapsNet(object):
             if self.recon_with_y:  # 根据label取网络的输出
                 # [?, 10, 16] x [?, 10, 1] => [?, 10, 16]
                 y = tf.one_hot(self.labels, depth=10, axis=1, dtype=tf.float32)
-                masked_v = tf.multiply(tf.squeeze(self.caps_digit), tf.reshape(y, (-1, 10, 1)))
+                masked_v = tf.multiply(tf.squeeze(caps_digit), tf.reshape(y, (-1, 10, 1)))
             else:  # 取网络中最可能的输出
                 for which in range(self.batch_size):
                     # v Representation of the reconstruction target
-                    v = self.caps_digit[which][self.prediction[which], :]
+                    v = caps_digit[which][prediction[which], :]
                     masked_v.append(tf.reshape(v, shape=(1, 1, 16, 1)))
                     pass
                 masked_v = tf.concat(masked_v, axis=0)  # [?, 1, 16, 1]
                 pass
+            # recons_input
+            vector_j = tf.reshape(masked_v, shape=(self.batch_size, -1))  # [?, 16]
+            pass
 
         # reconstructe the MNIST images with 3 FC layers
         with tf.variable_scope('Decoder'):  # [?, 1, 16, 1] => [?, 16] => [?, 512]
-            vector_j = tf.reshape(self.masked_v, shape=(self.batch_size, -1))  # [?, 16]
-            fc1 = tcl.fully_connected(vector_j, num_outputs=512)  # [?, 512]
+            recons_input = vector_j  # [?, 16]
+            fc1 = tcl.fully_connected(recons_input, num_outputs=512)  # [?, 512]
             fc2 = tcl.fully_connected(fc1, num_outputs=1024)  # [?, 1024]
             decoded = tcl.fully_connected(fc2, num_outputs=784, activation_fn=tf.sigmoid)  # [?, 784]
             pass
 
-        return caps_digit, v_length, prediction, batch_accuracy, masked_v, decoded
+        return caps_digit, v_length, prediction, batch_accuracy, recons_input, decoded
 
     # 1. The margin loss
     @staticmethod
