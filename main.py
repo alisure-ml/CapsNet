@@ -1,53 +1,71 @@
 import tensorflow as tf
 from tqdm import tqdm
 
-from config import cfg
-from utils import load_mnist
+from utils import load_mnist, save_images
 from capsNet import CapsNet
 
 
 class Runner:
 
-    def run(self):
-        # net
-        capsNet = CapsNet(is_training=cfg.is_training)
-        # A training helper that checkpoints models and computes summaries.
-        sv = tf.train.Supervisor(graph=capsNet.graph, logdir=cfg.logdir, save_model_secs=0)
-        with sv.managed_session() as sess:
-            num_batch = 60000 // cfg.batch_size
-            num_test_batch = 10000 // cfg.batch_size
-            # data
-            test_x, test_y = load_mnist(False)
-            for epoch in range(cfg.epoch):
-                global_step = None
-                if sv.should_stop():
-                    break
-                for step in tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
-                    # train
-                    global_step, _ = sess.run([capsNet.global_step, capsNet.train_op])
-                    # summary
-                    if step % cfg.train_sum_freq == 0:
-                        summary_str = sess.run(capsNet.train_summary)
-                        sv.summary_writer.add_summary(summary_str, global_step)
-                    # test
-                    if (global_step + 1) % cfg.test_sum_freq == 0:
-                        test_acc = 0
-                        for i in range(num_test_batch):
-                            start = i * cfg.batch_size
-                            end = start + cfg.batch_size
-                            test_acc += sess.run(capsNet.batch_accuracy, {capsNet.X: test_x[start:end],
-                                                                          capsNet.labels: test_y[start:end]})
-                        test_acc = test_acc / (cfg.batch_size * num_test_batch)
-                        print("{} {}".format(epoch, test_acc))
-                    pass
-                # save model
-                if epoch % cfg.save_freq == 0:
-                    sv.saver.save(sess, cfg.logdir + '/model_epoch_%04d_step_%02d' % (epoch, global_step))
-            pass
+    def __init__(self, batch_size, model_path="log"):
+        self.batch_size = batch_size
+        self.model_path = model_path
 
+        # data
+        self.num_train_batch = 60000 // self.batch_size
+        self.num_test_batch = 10000 // self.batch_size
+        self.test_x, self.test_y = load_mnist(is_training=False)
+
+        # net
+        self.capsNet = CapsNet(batch_size=self.batch_size, is_training=True, use_recons_loss=True, recon_with_y=True)
+
+        # A training helper that checkpoints models and computes summaries.
+        self.sv = tf.train.Supervisor(graph=self.capsNet.graph, logdir=model_path, save_model_secs=0)
+        self.sess = self.sv.managed_session()
         pass
+
+    def train(self, epochs=6, test_sum_freq=500, save_model_freq=3):
+        for epoch in range(epochs):
+            if self.sv.should_stop():
+                break
+            for step in tqdm(range(self.num_train_batch), total=self.num_train_batch, ncols=70, leave=False, unit='b'):
+                # train
+                _ = self.sess.run(self.capsNet.train_op)
+                # test
+                if (step + 1) % test_sum_freq == 0:
+                    self.test(epoch)
+            # save model
+            if epoch % save_model_freq == 0:
+                self.sv.saver.save(self.sess, self.model_path + '/model_epoch_%04d' % epoch)
+        pass
+
+    def recons(self, number=8, result_path="result"):
+        number_2 = number * number
+        if self.capsNet.recon_with_y:
+            feed_dict = {self.capsNet.x: self.test_x[0: number_2], self.capsNet.labels: self.test_y[0: number_2]}
+        else:
+            feed_dict = {self.capsNet.x: self.test_x[0: number_2]}
+
+        _, decoded = self.sess.run([self.capsNet.masked_v, self.capsNet.decoded], feed_dict=feed_dict)
+        save_images(decoded, [number, number], path=result_path)
+        pass
+
+    # test
+    def test(self, epoch):
+        test_acc = 0
+        for i in range(self.num_test_batch):
+            start = i * self.batch_size
+            end = start + self.batch_size
+            test_acc += self.sess.run(self.capsNet.batch_accuracy, {self.capsNet.x: self.test_x[start:end],
+                                                                    self.capsNet.labels: self.test_y[start:end]})
+        test_acc = test_acc / (self.batch_size * self.num_test_batch)
+        print("{} {}".format(epoch, test_acc))
+        return test_acc
 
     pass
 
 if __name__ == "__main__":
-    Runner().run()
+    runner = Runner(batch_size=128)
+    runner.train()
+    runner.recons()
+
