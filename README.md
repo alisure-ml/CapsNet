@@ -15,7 +15,7 @@
 #### 2. Paper 5.1: What the individual dimensions of a capsule represent
 > Just run runner.recons_random_slow() as show in Run  
 
-Each row shows there construction when one of the 16 dimensions in the DigitCaps representation is tweaked by intervals of 1/63 in the range [−0.5,0.5], the leftmost col was not tweaked.  
+**Each row shows there construction when one of the 16 dimensions in the DigitCaps representation is tweaked by intervals of 1/63 in the range [−0.5,0.5], the leftmost col was not tweaked.**  
 ![Reconstruction](./readme/random_2_0.01587.bmp)
 
 
