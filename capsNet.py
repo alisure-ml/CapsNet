@@ -17,6 +17,12 @@ class CapsNet(object):
         self.use_recons_loss = use_recons_loss
         self.recon_with_y = recon_with_y
 
+        self.x, self.labels = None, None
+        self.caps_digit, self.v_length, self.prediction, self.batch_accuracy = None, None, None, None
+        self.recons_input, self.decoded = None, None
+        self.margin_loss, self.total_loss = None, None
+        self.train_op = None
+
         with self.graph.as_default():
             # input
             self.x, self.labels = get_batch_data(batch_size)

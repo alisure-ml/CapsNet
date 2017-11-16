@@ -41,7 +41,8 @@ class Runner:
                     self._test(sess, epoch)
                 # recons
                 if epoch % recons_freq == 0:
-                    self._recons(sess, result_file="result/result_{}_{}.bmp".format(self.type_name, epoch))
+                    self._recons(sess, result_file="result/result_{}_{}.bmp".format(self.type_name, epoch),
+                                 recons_file="recons/mask.txt")
                 # save model
                 if epoch % save_model_freq == 0:
                     self.sv.saver.save(sess, self.model_path + '/model_epoch_%04d' % epoch)
@@ -51,7 +52,8 @@ class Runner:
     # 1.重构
     def recons(self):
         with self.sv.managed_session() as sess:
-            self._recons(sess, result_file="result/result_{}.bmp".format(self.type_name), recons_file="recons/mask.txt")
+            self._recons(sess, result_file="result/result_{}.bmp".format(self.type_name),
+                         recons_file="recons/mask.txt")
         pass
 
     # 重构
