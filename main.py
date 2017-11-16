@@ -24,11 +24,15 @@ class Runner:
 
         # A training helper that checkpoints models and computes summaries.
         self.sv = tf.train.Supervisor(graph=self.capsNet.graph, logdir=self.model_path, save_model_secs=0)
+
+        # config
+        self.config = tf.ConfigProto()
+        self.config.gpu_options.allow_growth = True
         pass
 
     # 训练
     def train(self, epochs=10, test_freq=1, recons_freq=5, save_model_freq=1):
-        with self.sv.managed_session() as sess:
+        with self.sv.managed_session(config=self.config) as sess:
             for epoch in range(epochs):
                 # stop
                 if self.sv.should_stop():
@@ -51,7 +55,7 @@ class Runner:
 
     # 1.重构
     def recons(self):
-        with self.sv.managed_session() as sess:
+        with self.sv.managed_session(config=self.config) as sess:
             self._recons(sess, result_file="result/result_{}.bmp".format(self.type_name),
                          recons_file="recons/mask.txt")
         pass
@@ -82,7 +86,7 @@ class Runner:
             [-0.206, -0.143, 0.193, -0.0517, -0.123, -0.0842, 0.134, -0.098, 0.184, 0.0991, 0.0826, 0.138, 0.119, 0.211, 0.212, -0.125]
         ]
 
-        with self.sv.managed_session() as sess:
+        with self.sv.managed_session(config=self.config) as sess:
             for which_number in range(10):
                 input_random = np.zeros(shape=[self.batch_size, 16], dtype=np.float32)
                 for index in [0, 1]:
@@ -118,7 +122,7 @@ class Runner:
         ]
 
         change_speed = (0.5 - -0.5) / 63
-        with self.sv.managed_session() as sess:
+        with self.sv.managed_session(config=self.config) as sess:
             for number_index in range(10):
                 decodes = []
                 for attr_index in range(len(baseline[0])):
@@ -142,7 +146,7 @@ class Runner:
 
     # 测试
     def test(self, info="test"):
-        with self.sv.managed_session() as sess:
+        with self.sv.managed_session(config=self.config) as sess:
             self._test(sess, info)
         pass
 
